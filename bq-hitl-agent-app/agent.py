@@ -16,7 +16,7 @@ import logging
 from typing import Any, Dict
 
 import google.auth
-from google.adk.agents import LlmAgent, SequentialAgent
+from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.bigquery import BigQueryCredentialsConfig, BigQueryToolset
@@ -171,9 +171,9 @@ query_executor_agent = LlmAgent(
 )
 
 
-# --- Interactive Planner Agent (HITL) ---
-interactive_planner_agent = LlmAgent(
-    name="interactive_planner_agent",
+# --- Root Agent (HITL) ---
+root_agent = LlmAgent(
+    name="BigQueryHITLWorkflow",
     model=config.worker_model,
     description="主要なBigQueryアシスタント。実行前にユーザーと協力してクエリプランを作成し、承認を得ます。",
     instruction=f"""
@@ -190,16 +190,16 @@ interactive_planner_agent = LlmAgent(
        - ユーザーの明示的な確認を待ちます（例：「承認します」「実行してください」「OK」「承認」「了解」「はい」）。
     4. **実行:** ユーザーが明示的に承認した場合、または承認が不要な場合：
        - セッションステートの`approved_query`を保留中のクエリ（または承認が不要だった場合は生成されたクエリ）に設定します。
-       - タスクを`query_executor`エージェントに委譲します。
+       - `query_executor`ツールを使用してクエリを実行します。
 
     **承認処理:**
     - クエリに承認が必要な場合、続行する前にユーザーの明示的な確認を待つ必要があります。
     - ユーザーメッセージ内の承認キーワードを探します：「承認」「承認します」「実行」「実行してください」「OK」「了解」「はい」
     - ユーザーから明確な承認を受けるまで実行に進まないでください。
     - ユーザーが拒否したり、クエリの変更を求めたりした場合、`query_plan_generator`を再度使用してプランを改善します。
-    - 承認されたら、`approved_query` = `pending_query`を設定し、`query_executor`に制御を渡します。
+    - 承認されたら、`approved_query` = `pending_query`を設定し、`query_executor`ツールを呼び出します。
 
-    **クエリストレージ:**
+    **セッション状態の管理:**
     - 保留中のクエリ: `pending_query`, `pending_query_bytes`, `pending_query_project_id`
     - 承認されたクエリ: `approved_query`, `approved_query_project_id`
     - 実行エージェントに委譲する際は、承認されたクエリの値を使用します。
@@ -207,17 +207,7 @@ interactive_planner_agent = LlmAgent(
     現在のプロジェクト: {config.project_id}
     現在のデータセット: {config.dataset_id}
     """,
-    sub_agents=[query_executor_agent],
-    tools=[AgentTool(query_plan_generator)],
+    tools=[AgentTool(query_plan_generator), AgentTool(query_executor_agent)],
     output_key="query_plan",
 )
 
-
-# --- Root Agent (Sequential Workflow) ---
-root_agent = SequentialAgent(
-    name="BigQueryHITLWorkflow",
-    description="高コストクエリに対して人間による承認を含むBigQueryクエリ計画と実行のワークフロー。",
-    sub_agents=[
-        interactive_planner_agent,
-    ],
-)
