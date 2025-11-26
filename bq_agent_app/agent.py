@@ -9,16 +9,18 @@ from google.adk.tools.tool_context import ToolContext
 
 from .config import config
 
-application_default_credentials, _ = google.auth.default()
-credentials_config = BigQueryCredentialsConfig(
-    credentials=application_default_credentials
-)
+# Agent Engineにデプロイするときにサービスアカウントでエージェントを動作させ
+# Tool自体の認証にも同じサービスアカウントを使ってほしい場合は以下をコメントアウト
+# application_default_credentials, _ = google.auth.default()
+# credentials_config = BigQueryCredentialsConfig(
+#     credentials=application_default_credentials
+# )
 
 tool_config = BigQueryToolConfig(write_mode=WriteMode.BLOCKED)
 
 bigquery_toolset = BigQueryToolset(
     tool_filter=["execute_sql", "get_table_info", "list_table_ids", "list_dataset_ids"],
-    credentials_config=credentials_config,
+    # credentials_config=credentials_config, # Tool自体の認証にエージェントと同じサービスアカウントを使ってほしい場合はここをコメントアウト
     bigquery_tool_config=tool_config
 )
 
